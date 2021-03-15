@@ -33,6 +33,7 @@ function add_var!(q, argtup, gcpres, ::Type{T}, argtupname, gcpresname, k) where
     parg_k = Symbol(argtupname, :_, k)
     garg_k = Symbol(gcpresname, :_, k)
     if T <: Tuple
+        # Will need fixing as per else statement
         push!(q.args, Expr(:(=), parg_k, Expr(:ref, argtupname, k)))
         t = Expr(:tuple)
         for (j,p) ∈ enumerate(T.parameters)
@@ -40,9 +41,10 @@ function add_var!(q, argtup, gcpres, ::Type{T}, argtupname, gcpresname, k) where
         end
         push!(argtup.args, t)
     else
-        push!(q.args, Expr(:(=), Expr(:tuple, parg_k, garg_k), Expr(:call, :object_and_preserve, Expr(:ref, argtupname, k))))
-        push!(argtup.args, parg_k)
-        push!(gcpres.args, garg_k)
+        # push!(q.args, Expr(:(=), Expr(:tuple, parg_k, garg_k), Expr(:call, :object_and_preserve, Expr(:ref, argtupname, k))))
+        # push!(argtup.args, parg_k)
+        # push!(gcpres.args, garg_k)
+        push!(argtup.args, Expr(:ref, argtupname, k))
     end
 end
 
@@ -73,7 +75,7 @@ end
             i == nthread && break
         end
         # @show start, ulen
-        f!(map(dereference, argtup), start, ulen)
+        f!(dereference(argtup), start, ulen)
         tm = mask(threads)
         tid = 0x00000000
         while true
@@ -88,12 +90,12 @@ end
         free_threads!(torelease)
         nothing
     end
-    gcpr = Expr(:gc_preserve, block, :cfunc)
+    gcpr = Expr(:gc_preserve, block, :cfunc, :gcargtup)
     argt = Expr(:tuple)
     for k ∈ 1:K
         add_var!(q, argt, gcpr, args[k], :args, :gcp, k)
     end
-    push!(q.args, :(argtup = $argt), :(cfunc = batch_closure(f!, argtup, Val{false}())), gcpr)
+    push!(q.args, :(argtup_temp = $argt), Expr(:(=), Expr(:tuple, :argtup, :gcargtup), Expr(:call, :object_and_preserve, :argtup_temp)), :(cfunc = batch_closure(f!, argtup, Val{false}())), gcpr)
     push!(q.args, nothing)
     q
 end
